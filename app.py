@@ -1,4 +1,4 @@
-# EduBot – Premium AI Student-Teacher Platform (Single file, no Plotly)
+# EduBot – Premium AI Student-Teacher Platform (No Plotly, Bypassed Login for Testing)
 # Deploy on Streamlit Cloud with secrets: SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY
 
 import streamlit as st
@@ -13,7 +13,6 @@ import google.generativeai as genai
 # ---------- Page Config & Premium CSS ----------
 st.set_page_config(page_title="EduBot", page_icon="🎓", layout="wide")
 
-# Premium CSS with animations and glassmorphism
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -61,15 +60,10 @@ st.markdown("""
     h1, h2, h3 {
         letter-spacing: -0.5px;
     }
-    .logout-btn button {
-        background: transparent !important;
-        border: 1px solid rgba(255,255,255,0.3) !important;
-        color: white !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- Environment Setup (Streamlit secrets) ----------
+# ---------- Environment Setup ----------
 SUPABASE_URL = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -89,33 +83,21 @@ SYSTEM_PROMPT = (
 )
 model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=SYSTEM_PROMPT)
 
-# ---------- Session State ----------
+# ---------- Session State (bypassed login) ----------
 if "authenticated" not in st.session_state:
     st.session_state.update({
-        "authenticated": False,
-        "role": None,
-        "user_id": None,
-        "name": None,
-        "email": None,
+        "authenticated": True,               # <-- Testing bypass
+        "role": "Student",                   # <-- Testing bypass
+        "user_id": "test-user-bypass-123",   # <-- dummy ID
+        "name": "Tester",
+        "email": "test@example.com",
         "messages": []
     })
 
-# ---------- Helper Functions (same as before) ----------
+# ---------- Helper Functions ----------
 def login_user(email, password, role):
-    table = "students" if role == "Student" else "teachers"
-    try:
-        res = supabase.table(table).select("*").eq("email", email).eq("password", password).execute()
-        if res.data:
-            user = res.data[0]
-            st.session_state.authenticated = True
-            st.session_state.role = role
-            st.session_state.user_id = user["id"]
-            st.session_state.name = user["name"]
-            st.session_state.email = user["email"]
-            return True
-    except Exception as e:
-        st.error(f"Login error: {e}")
-    return False
+    # Not used in testing mode
+    pass
 
 def get_chat_response(user_message, history):
     chat = model.start_chat(history=history)
@@ -141,6 +123,7 @@ def extract_weak_topics(conversation):
     return {"weak_topics": [], "summary": "Summary not available."}
 
 def save_session(weak_topics, summary):
+    # Will fail silently because 'test-user-bypass-123' doesn't exist in Supabase
     try:
         supabase.table("conversations").insert({
             "student_id": st.session_state.user_id,
@@ -159,43 +142,18 @@ def save_session(weak_topics, summary):
             }).execute()
         return True
     except Exception as e:
-        st.error(f"Error saving: {e}")
+        st.warning(f"Save skipped (test mode): {e}")
         return False
 
-# ---------- Login Page ----------
-def login_page():
-    st.markdown("<div style='text-align: center; margin-top: 5rem;'>", unsafe_allow_html=True)
-    st.title("🎓 EduBot")
-    st.caption("AI‑powered learning companion")
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        with st.container():
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            role = st.radio("I am a", ["Student", "Teacher"], horizontal=True)
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
-            if st.button("Login", use_container_width=True):
-                if not email or not password:
-                    st.error("Please fill all fields.")
-                elif login_user(email, password, role):
-                    st.success("Login successful!")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials.")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------- Student Dashboard (Premium) ----------
+# ---------- Student Dashboard ----------
 def student_dashboard():
     st.markdown(f"# 👋 Hi, {st.session_state.name.split()[0]}!")
     st.caption("Ask EduBot anything — I'm here to help you learn.")
-    
-    # Chat
+
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-    
+
     if prompt := st.chat_input("Type your question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -211,8 +169,7 @@ def student_dashboard():
                 response = get_chat_response(prompt, gemini_history)
                 st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
-    
-    # End session
+
     if st.button("📊 End Session & Analyse", use_container_width=True):
         if len(st.session_state.messages) < 2:
             st.warning("Chat a bit first!")
@@ -223,16 +180,16 @@ def student_dashboard():
                 weak = analysis.get("weak_topics", [])
                 if save_session(weak, summary):
                     st.success("Session saved!")
-                    with st.expander("📝 Session Summary"):
-                        st.write(summary)
-                        if weak:
-                            st.warning("🟡 Weak topics: " + ", ".join(weak))
-                        else:
-                            st.balloons()
-                            st.success("No weak topics — great job!")
-                    st.session_state.messages = []
+                with st.expander("📝 Session Summary"):
+                    st.write(summary)
+                    if weak:
+                        st.warning("🟡 Weak topics: " + ", ".join(weak))
+                    else:
+                        st.balloons()
+                        st.success("No weak topics — great job!")
+                st.session_state.messages = []
 
-# ---------- Teacher Dashboard (No Plotly, premium UI) ----------
+# ---------- Teacher Dashboard ----------
 def teacher_dashboard():
     st.markdown(f"# 📊 Class Analytics")
     st.caption(f"Welcome back, {st.session_state.name}")
@@ -261,10 +218,9 @@ def teacher_dashboard():
     
     df = load_data()
     if df.empty:
-        st.info("No weak topic data yet. Encourage your students to chat with EduBot!")
+        st.info("No weak topic data yet.")
         return
-    
-    # ----- Metric Cards (animated) -----
+
     total_students = df["student"].nunique()
     total_topics = df["topic"].nunique()
     total_flags = len(df)
@@ -273,44 +229,29 @@ def teacher_dashboard():
     col1.markdown(f'<div class="metric-card"><h2>{total_students}</h2><p>Struggling Students</p></div>', unsafe_allow_html=True)
     col2.markdown(f'<div class="metric-card"><h2>{total_topics}</h2><p>Weak Topics</p></div>', unsafe_allow_html=True)
     col3.markdown(f'<div class="metric-card"><h2>{total_flags}</h2><p>Total Flags</p></div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # ----- Bar Chart (Streamlit native) -----
+
     st.subheader("📈 Topics with Most Struggling Students")
     topic_counts = df.groupby("topic")["student"].nunique().sort_values(ascending=False)
     st.bar_chart(topic_counts, use_container_width=True)
-    
-    # ----- Student Breakdown Table with expander -----
+
     st.subheader("👥 Student Weakness Details")
     pivot = df.pivot_table(index="student", columns="topic", aggfunc="size", fill_value=0)
     st.dataframe(pivot, use_container_width=True)
-    
-    # Download CSV
+
     csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download Full Report", csv, "edubot_report.csv")
 
-# ---------- Main App ----------
+# ---------- Main (bypass login completely) ----------
 def main():
-    if not st.session_state.authenticated:
-        login_page()
+    # In testing mode, we go directly to the student dashboard
+    # To restore login, uncomment the lines below and remove the direct call
+    # if not st.session_state.authenticated:
+    #     login_page()
+    # else:
+    if st.session_state.role == "Student":
+        student_dashboard()
     else:
-        # Sidebar with glass card effect
-        with st.sidebar:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.markdown(f"### 👤 {st.session_state.name}")
-            st.caption(f"{st.session_state.role} • {st.session_state.email}")
-            st.divider()
-            if st.button("🚪 Logout", use_container_width=True):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-        
-        if st.session_state.role == "Student":
-            student_dashboard()
-        else:
-            teacher_dashboard()
+        teacher_dashboard()
 
 if __name__ == "__main__":
     main()
